@@ -125,6 +125,15 @@ bool CHyprBar::inputIsValid() {
 }
 
 void CHyprBar::onMouseButton(Event::SCallbackInfo& info, IPointer::SButtonEvent e) {
+    // A release must always reach the bar that consumed the matching press, even if
+    // the window lost focus or moved away from the cursor in between (e.g. after a
+    // minimize button hid it). Otherwise m_bCancelledDown stays set and a later,
+    // unrelated release gets swallowed, leaving the button stuck in the client.
+    if (e.state != WL_POINTER_BUTTON_STATE_PRESSED && ownsPointerSequence()) {
+        handleUpEvent(info);
+        return;
+    }
+
     if (!inputIsValid())
         return;
 
@@ -260,8 +269,12 @@ void CHyprBar::handleDownEvent(Event::SCallbackInfo& info, std::optional<ITouch:
     }
 }
 
+bool CHyprBar::ownsPointerSequence() const {
+    return m_bCancelledDown || m_bDraggingThis || m_bDragPending;
+}
+
 void CHyprBar::handleUpEvent(Event::SCallbackInfo& info) {
-    if (m_pWindow.lock() != Desktop::focusState()->window())
+    if (!ownsPointerSequence() && m_pWindow.lock() != Desktop::focusState()->window())
         return;
 
     if (m_bCancelledDown)
